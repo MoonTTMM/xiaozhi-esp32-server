@@ -50,15 +50,23 @@ hass_set_state_function_desc = {
 
 
 @register_function("hass_set_state", hass_set_state_function_desc, ToolType.SYSTEM_CTL)
-def hass_set_state(conn, entity_id="", state={}):
+def hass_set_state(conn, entity_id="", state=None):
+    if state is None:
+        state = {}
     try:
         future = asyncio.run_coroutine_threadsafe(
             handle_hass_set_state(conn, entity_id, state), conn.loop
         )
-        ha_response = future.result()
+        # 添加10秒超时
+        ha_response = future.result(timeout=10)
         return ActionResponse(Action.REQLLM, ha_response, None)
+    except asyncio.TimeoutError:
+        logger.bind(tag=TAG).error("设置Home Assistant状态超时")
+        return ActionResponse(Action.ERROR, "请求超时", None)
     except Exception as e:
-        logger.bind(tag=TAG).error(f"处理设置属性意图错误: {e}")
+        error_msg = f"执行Home Assistant操作失败"
+        logger.bind(tag=TAG).error(error_msg)
+        return ActionResponse(Action.ERROR, error_msg, None)
 
 
 async def handle_hass_set_state(conn, entity_id, state):
@@ -151,7 +159,7 @@ async def handle_hass_set_state(conn, entity_id, state):
         if domain == "vacuum":
             action = "start"
     else:
-        return f"{domain} {state.type}功能尚未支持"
+        return f"{domain} {state['type']}功能尚未支持"
 
     if arg == "":
         data = {

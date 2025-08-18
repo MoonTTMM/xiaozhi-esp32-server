@@ -2,7 +2,6 @@ import json
 import asyncio
 import uuid
 from core.handle.sendAudioHandle import send_stt_message
-from core.handle.helloHandle import checkWakeupWords
 from core.utils.util import remove_punctuation_and_length
 from core.providers.tts.dto.dto import ContentType
 from core.utils.dialogue import Message
@@ -13,12 +12,19 @@ TAG = __name__
 
 
 async def handle_user_intent(conn, text):
+    # 预处理输入文本，处理可能的JSON格式
+    try:
+        if text.strip().startswith('{') and text.strip().endswith('}'):
+            parsed_data = json.loads(text)
+            if isinstance(parsed_data, dict) and "content" in parsed_data:
+                text = parsed_data["content"]  # 提取content用于意图分析
+                conn.current_speaker = parsed_data.get("speaker")  # 保留说话人信息
+    except (json.JSONDecodeError, TypeError):
+        pass
+
     # 检查是否有明确的退出命令
     filtered_text = remove_punctuation_and_length(text)[1]
     if await check_direct_exit(conn, filtered_text):
-        return True
-    # 检查是否是唤醒词
-    if await checkWakeupWords(conn, filtered_text):
         return True
 
     if conn.intent_type == "function_call":
