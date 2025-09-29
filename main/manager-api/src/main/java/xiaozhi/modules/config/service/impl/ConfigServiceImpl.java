@@ -298,6 +298,20 @@ public class ConfigServiceImpl implements ConfigService {
             Map<String, Object> voiceprintConfig = new HashMap<>();
             voiceprintConfig.put("url", voiceprintUrl);
             voiceprintConfig.put("speakers", speakers);
+            
+            // 获取声纹识别相似度阈值，默认0.4
+            String thresholdStr = sysParamsService.getValue("server.voiceprint_similarity_threshold", true);
+            if (StringUtils.isNotBlank(thresholdStr) && !"null".equals(thresholdStr)) {
+                try {
+                    double threshold = Double.parseDouble(thresholdStr);
+                    voiceprintConfig.put("similarity_threshold", threshold);
+                } catch (NumberFormatException e) {
+                    // 如果解析失败，使用默认值0.4
+                    voiceprintConfig.put("similarity_threshold", 0.4);
+                }
+            } else {
+                voiceprintConfig.put("similarity_threshold", 0.4);
+            }
 
             result.put("voiceprint", voiceprintConfig);
         } catch (Exception e) {
@@ -336,7 +350,7 @@ public class ConfigServiceImpl implements ConfigService {
      * @param result         结果Map
      */
     private void buildModuleConfig(
-            String assistantName,
+            String assistantName, 
             String prompt,
             String summaryMemory,
             String voice,
@@ -352,17 +366,18 @@ public class ConfigServiceImpl implements ConfigService {
             Map<String, Object> result,
             boolean isCache) {
         Map<String, String> selectedModule = new HashMap<>();
-
+    
         String[] modelTypes = { "VAD", "ASR", "TTS", "Memory", "Intent", "LLM", "VLLM" };
         String[] modelIds = { vadModelId, asrModelId, ttsModelId, memModelId, intentModelId, llmModelId, vllmModelId };
         String intentLLMModelId = null;
         String memLocalShortLLMModelId = null;
-
+    
         for (int i = 0; i < modelIds.length; i++) {
             if (modelIds[i] == null) {
                 continue;
             }
-            ModelConfigEntity model = modelConfigService.getModelById(modelIds[i], isCache);
+            // 关键：第三个参数传false，确保获取原始密钥
+            ModelConfigEntity model = modelConfigService.getModelById(modelIds[i], isCache, false);
             if (model == null) {
                 continue;
             }
@@ -410,14 +425,16 @@ public class ConfigServiceImpl implements ConfigService {
                 if ("LLM".equals(modelTypes[i])) {
                     if (StringUtils.isNotBlank(intentLLMModelId)) {
                         if (!typeConfig.containsKey(intentLLMModelId)) {
-                            ModelConfigEntity intentLLM = modelConfigService.getModelById(intentLLMModelId, isCache);
+                            // 修改这里：添加isMaskSensitive=false参数
+                            ModelConfigEntity intentLLM = modelConfigService.getModelById(intentLLMModelId, isCache, false);
                             typeConfig.put(intentLLM.getId(), intentLLM.getConfigJson());
                         }
                     }
                     if (StringUtils.isNotBlank(memLocalShortLLMModelId)) {
                         if (!typeConfig.containsKey(memLocalShortLLMModelId)) {
+                            // 修改这里：添加isMaskSensitive=false参数
                             ModelConfigEntity memLocalShortLLM = modelConfigService
-                                    .getModelById(memLocalShortLLMModelId, isCache);
+                                    .getModelById(memLocalShortLLMModelId, isCache, false);
                             typeConfig.put(memLocalShortLLM.getId(), memLocalShortLLM.getConfigJson());
                         }
                     }
